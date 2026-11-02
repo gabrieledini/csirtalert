@@ -265,8 +265,10 @@ async function loadFeed() {
         ${i.summary ? `<p>${esc(i.summary)}</p>` : ''}
       </article>`;
     }).join('') || '<p class="empty">Il feed non contiene avvisi in questo momento.</p>';
-    const since = j.oldest ? new Date(j.oldest).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }) : null;
-    $('#upd').textContent = `${j.count} avvisi${since ? ' dal ' + since : ''}, aggiornati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+    const count = j.count ?? j.items.length;
+    const oldest = j.oldest ?? j.items.map(i => i.date).filter(Boolean).sort()[0];
+    const since = oldest ? new Date(oldest).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }) : null;
+    $('#upd').textContent = `${count} ${count === 1 ? 'avviso' : 'avvisi'}${since ? ' dal ' + since : ''}, aggiornati alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
     if (j.items[0]?.date) LS.set('lastVisit', j.items[0].date);
   } catch (e) {
     $('#list').innerHTML = `<p class="err">Feed non raggiungibile (${esc(e.message)}). Riprova con «Aggiorna».</p>`;
