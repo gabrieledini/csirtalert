@@ -1,13 +1,15 @@
 import webpush from 'web-push';
 import { getStore } from '@netlify/blobs';
 
-export const FEED_URL = process.env.CSIRT_FEED_URL
-  || 'https://www.acn.gov.it/portale/feedrss/-/journal/rss/20119/723192';
+// Uno o più feed separati da virgola in CSIRT_FEED_URL
+export const FEED_URLS = (process.env.CSIRT_FEED_URL
+  || 'https://csirt.regione.toscana.it/category/alert/feed/')
+  .split(',').map(s => s.trim()).filter(Boolean);
 
 const decode = s => s
   .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-  .replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, ' ')
+  .replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, ' ').replace(/&hellip;/g, '…')
   .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
   .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
   .replace(/&amp;/g, '&');
@@ -30,22 +32,33 @@ export function parseFeed(xml) {
       title: plain(tag(b, 'title')),
       link,
       date: iso(tag(b, 'pubDate') || tag(b, 'published') || tag(b, 'updated') || tag(b, 'dc:date')),
-      summary: plain(tag(b, 'description') || tag(b, 'summary') || tag(b, 'content')).slice(0, 400),
+      summary: plain(tag(b, 'description') || tag(b, 'summary') || tag(b, 'content'))
+        .replace(/\s*(L['’]articolo|The post)\s[\s\S]*$/, '')   // coda standard di WordPress
+        .replace(/\s*\[(…|\.\.\.)\]\s*$/, '…')
+        .slice(0, 400),
     };
   }).filter(i => i.id && i.title);
 }
 
-export async function fetchItems() {
-  const r = await fetch(FEED_URL, {
+async function fetchOne(url) {
+  const r = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (compatible; csirt-push/1.0)',
       'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml',
     },
   });
-  if (!r.ok) throw new Error(`feed HTTP ${r.status}`);
-  const items = parseFeed(await r.text());
-  if (!items.length) throw new Error('feed vuoto o formato non riconosciuto');
-  return items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (!r.ok) throw new Error(`${url} → HTTP ${r.status}`);
+  return parseFeed(await r.text());
+}
+
+export async function fetchItems() {
+  const res = await Promise.allSettled(FEED_URLS.map(fetchOne));
+  res.filter(r => r.status === 'rejected').forEach(r => console.error(r.reason.message));
+  const all = res.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+  if (!all.length) throw new Error(res.map(r => r.reason?.message).filter(Boolean).join('; ') || 'feed vuoti o formato non riconosciuto');
+  const byLink = new Map();
+  for (const i of all) if (!byLink.has(i.link || i.id)) byLink.set(i.link || i.id, i);
+  return [...byLink.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
 export const subsStore = () => getStore('csirt-subs');
