@@ -21,7 +21,7 @@ export default async (req) => {
     }
     if (action === 'test') {
       await initPush().sendNotification(subscription, JSON.stringify({
-        title: 'CSIRT Italia: notifica di prova',
+        title: 'CSIRT Toscana: notifica di prova',
         body: 'Le notifiche funzionano. Riceverai qui i nuovi avvisi.',
         url: '/', tag: 'csirt-test',
       }));

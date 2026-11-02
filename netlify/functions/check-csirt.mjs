@@ -1,17 +1,18 @@
-import { fetchItems, stateStore, subsStore, initPush, matches } from '../lib/csirt.mjs';
+import { FEED_URLS, fetchItems, stateStore, subsStore, initPush, matches } from '../lib/csirt.mjs';
 
 const payloads = list => list.length <= 3
-  ? list.map(i => ({ title: i.title, body: i.summary || 'Nuovo avviso CSIRT Italia', url: i.link || '/', tag: i.id }))
-  : [{ title: `CSIRT Italia: ${list.length} nuovi avvisi`, body: list.map(i => '• ' + i.title).join('\n').slice(0, 300), url: '/', tag: 'csirt-batch' }];
+  ? list.map(i => ({ title: i.title, body: i.summary || 'Nuovo avviso CSIRT Toscana', url: i.link || '/', tag: i.id }))
+  : [{ title: `CSIRT Toscana: ${list.length} nuovi avvisi`, body: list.map(i => '• ' + i.title).join('\n').slice(0, 300), url: '/', tag: 'csirt-batch' }];
 
 export default async () => {
   const st = stateStore();
   const prev = await st.get('seen', { type: 'json' });
   const items = await fetchItems();
 
-  // Primo giro: memorizza lo stato senza notificare lo storico
-  if (!prev) {
-    await st.setJSON('seen', { ids: items.map(i => i.id), at: new Date().toISOString() });
+  const src = FEED_URLS.join(',');
+  // Primo giro o fonte cambiata: memorizza lo stato senza notificare lo storico
+  if (!prev || prev.src !== src) {
+    await st.setJSON('seen', { src, ids: items.map(i => i.id), at: new Date().toISOString() });
     console.log(`seed: ${items.length} avvisi`);
     return;
   }
@@ -40,7 +41,7 @@ export default async () => {
   }
 
   const ids = [...new Set([...items.map(i => i.id), ...prev.ids])].slice(0, 500);
-  await st.setJSON('seen', { ids, at: new Date().toISOString() });
+  await st.setJSON('seen', { src, ids, at: new Date().toISOString() });
 };
 
 export const config = { schedule: '*/15 * * * *' };
